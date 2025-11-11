@@ -15,10 +15,17 @@ const darkTheme = createTheme({
 });
 
 function App() {
+  const [hours, setHours] = useState(0);
+  const [minutes, setMinutes] = useState(0);
   const [seconds, setSeconds] = useState(10);
   const [running, setRunning] = useState(false);
   const [countdown, setCountdown] = useState(10);
   const timerRef = useRef(null);
+
+  // Helper to get total seconds
+  const getTotalSeconds = useCallback(() => {
+    return hours * 3600 + minutes * 60 + seconds;
+  }, [hours, minutes, seconds]);
 
   // Memoized beep sound
   const beep = useCallback(() => {
@@ -36,19 +43,20 @@ function App() {
 
   // Timer effect
   useEffect(() => {
-    if (!running) {
-      setCountdown(seconds);
+    const totalSeconds = getTotalSeconds();
+    if (!running || totalSeconds < 1) {
+      setCountdown(totalSeconds);
       return;
     }
     beep();
-    setCountdown(seconds);
+    setCountdown(totalSeconds);
     timerRef.current = setInterval(() => {
       beep();
-      setCountdown(seconds);
-    }, seconds * 1000);
+      setCountdown(totalSeconds);
+    }, totalSeconds * 1000);
 
     const countdownInterval = setInterval(() => {
-      setCountdown((prev) => (prev > 1 ? prev - 1 : seconds));
+      setCountdown((prev) => (prev > 1 ? prev - 1 : totalSeconds));
     }, 1000);
 
     return () => {
@@ -56,15 +64,38 @@ function App() {
       clearInterval(countdownInterval);
       timerRef.current = null;
     };
-  }, [running, seconds, beep]);
+  }, [running, getTotalSeconds, beep]);
 
   const handleStart = () => setRunning(true);
   const handleStop = () => setRunning(false);
 
+  const handleHoursChange = (e) => {
+    const value = Math.max(0, Number(e.target.value));
+    setHours(value);
+  };
+  const handleMinutesChange = (e) => {
+    let value = Math.max(0, Number(e.target.value));
+    if (value > 59) value = 59;
+    setMinutes(value);
+  };
   const handleSecondsChange = (e) => {
-    const value = Math.max(1, Number(e.target.value));
+    let value = Math.max(0, Number(e.target.value));
+    if (value > 59) value = 59;
     setSeconds(value);
-    setCountdown(value);
+  };
+
+  useEffect(() => {
+    setCountdown(getTotalSeconds());
+  }, [hours, minutes, seconds, getTotalSeconds]);
+
+  // Format countdown as hh:mm:ss
+  const formatCountdown = (secs) => {
+    const h = Math.floor(secs / 3600);
+    const m = Math.floor((secs % 3600) / 60);
+    const s = secs % 60;
+    return `${h.toString().padStart(2, "0")}:${m
+      .toString()
+      .padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
   };
 
   return (
@@ -97,20 +128,40 @@ function App() {
           <Typography variant="h4" gutterBottom>
             Repeat Timer
           </Typography>
-          <Box sx={{ mb: 2 }}>
+          <Box
+            sx={{ mb: 2, display: "flex", gap: 1, justifyContent: "center" }}
+          >
+            <TextField
+              label="Hours"
+              type="number"
+              value={hours}
+              onChange={handleHoursChange}
+              inputProps={{ min: 0, max: 99 }}
+              disabled={running}
+              sx={{ width: "80px" }}
+            />
+            <TextField
+              label="Minutes"
+              type="number"
+              value={minutes}
+              onChange={handleMinutesChange}
+              inputProps={{ min: 0, max: 59 }}
+              disabled={running}
+              sx={{ width: "80px" }}
+            />
             <TextField
               label="Seconds"
               type="number"
               value={seconds}
               onChange={handleSecondsChange}
-              inputProps={{ min: 1 }}
-              fullWidth
+              inputProps={{ min: 0, max: 59 }}
               disabled={running}
+              sx={{ width: "80px" }}
             />
           </Box>
           <Box sx={{ mb: 2 }}>
             <Typography variant="h6" color="primary">
-              {running ? `Next beep in ${countdown}s` : ""}
+              {running ? `Next beep in ${formatCountdown(countdown)}` : ""}
             </Typography>
           </Box>
           <Box>
@@ -120,6 +171,7 @@ function App() {
                 color="primary"
                 onClick={handleStart}
                 fullWidth
+                disabled={getTotalSeconds() < 1}
               >
                 Start
               </Button>
